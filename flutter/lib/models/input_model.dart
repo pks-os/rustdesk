@@ -784,6 +784,9 @@ class InputModel {
     if (!isInputSourceFlutter) {
       bind.sessionEnterOrLeave(sessionId: sessionId, enter: enter);
     }
+    if (!isWeb && enter) {
+      bind.setCurSessionId(sessionId: sessionId);
+    }
   }
 
   /// Send mouse movement event with distance in [x] and [y].
