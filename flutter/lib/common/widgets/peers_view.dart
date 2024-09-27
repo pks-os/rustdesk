@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/widgets/scroll_wrapper.dart';
+import 'package:flutter_hbb/models/peer_tab_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -40,6 +41,14 @@ class LoadEvent {
   static const String lan = 'load_lan_peers';
   static const String addressBook = 'load_address_book_peers';
   static const String group = 'load_group_peers';
+}
+
+class PeersModelName {
+  static const String recent = 'recent peer';
+  static const String favorite = 'fav peer';
+  static const String lan = 'discovered peer';
+  static const String addressBook = 'address book peer';
+  static const String group = 'group peer';
 }
 
 /// for peer search text, global obs value
@@ -172,7 +181,6 @@ class _PeersViewState extends State<_PeersView>
     // Continious rebuilds of `ChangeNotifierProvider` will cause memory leak.
     // Simple demo can reproduce this issue.
     return ChangeNotifierProvider<Peers>.value(
-      // https://pub.dev/packages/provider: If you already have an object instance and want to expose it, it would be best to use the .value constructor of a provider.
       value: widget.peers,
       child: Consumer<Peers>(builder: (context, peers, child) {
         if (peers.peers.isEmpty) {
@@ -188,7 +196,7 @@ class _PeersViewState extends State<_PeersView>
                 ).paddingOnly(bottom: 10),
                 Text(
                   translate(
-                    _emptyMessages[peers.loadEvent] ?? 'Empty',
+                    _emptyMessages[widget.peers.loadEvent] ?? 'Empty',
                   ),
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -405,28 +413,39 @@ class _PeersViewState extends State<_PeersView>
 }
 
 abstract class BasePeersView extends StatelessWidget {
-  final String name;
-  final String loadEvent;
+  final PeerTabIndex peerTabIndex;
   final PeerFilter? peerFilter;
   final PeerCardBuilder peerCardBuilder;
-  final GetInitPeers? getInitPeers;
 
   const BasePeersView({
     Key? key,
-    required this.name,
-    required this.loadEvent,
+    required this.peerTabIndex,
     this.peerFilter,
     required this.peerCardBuilder,
-    required this.getInitPeers,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    Peers peers;
+    switch (peerTabIndex) {
+      case PeerTabIndex.recent:
+        peers = gFFI.recentPeersModel;
+        break;
+      case PeerTabIndex.fav:
+        peers = gFFI.favoritePeersModel;
+        break;
+      case PeerTabIndex.lan:
+        peers = gFFI.lanPeersModel;
+        break;
+      case PeerTabIndex.ab:
+        peers = gFFI.abModel.peersModel;
+        break;
+      case PeerTabIndex.group:
+        peers = gFFI.groupModel.peersModel;
+        break;
+    }
     return _PeersView(
-        peers:
-            Peers(name: name, loadEvent: loadEvent, getInitPeers: getInitPeers),
-        peerFilter: peerFilter,
-        peerCardBuilder: peerCardBuilder);
+        peers: peers, peerFilter: peerFilter, peerCardBuilder: peerCardBuilder);
   }
 }
 
@@ -435,13 +454,11 @@ class RecentPeersView extends BasePeersView {
       {Key? key, EdgeInsets? menuPadding, ScrollController? scrollController})
       : super(
           key: key,
-          name: 'recent peer',
-          loadEvent: LoadEvent.recent,
+          peerTabIndex: PeerTabIndex.recent,
           peerCardBuilder: (Peer peer) => RecentPeerCard(
             peer: peer,
             menuPadding: menuPadding,
           ),
-          getInitPeers: null,
         );
 
   @override
@@ -457,13 +474,11 @@ class FavoritePeersView extends BasePeersView {
       {Key? key, EdgeInsets? menuPadding, ScrollController? scrollController})
       : super(
           key: key,
-          name: 'favorite peer',
-          loadEvent: LoadEvent.favorite,
+          peerTabIndex: PeerTabIndex.fav,
           peerCardBuilder: (Peer peer) => FavoritePeerCard(
             peer: peer,
             menuPadding: menuPadding,
           ),
-          getInitPeers: null,
         );
 
   @override
@@ -479,13 +494,11 @@ class DiscoveredPeersView extends BasePeersView {
       {Key? key, EdgeInsets? menuPadding, ScrollController? scrollController})
       : super(
           key: key,
-          name: 'discovered peer',
-          loadEvent: LoadEvent.lan,
+          peerTabIndex: PeerTabIndex.lan,
           peerCardBuilder: (Peer peer) => DiscoveredPeerCard(
             peer: peer,
             menuPadding: menuPadding,
           ),
-          getInitPeers: null,
         );
 
   @override
@@ -498,21 +511,16 @@ class DiscoveredPeersView extends BasePeersView {
 
 class AddressBookPeersView extends BasePeersView {
   AddressBookPeersView(
-      {Key? key,
-      EdgeInsets? menuPadding,
-      ScrollController? scrollController,
-      required GetInitPeers getInitPeers})
+      {Key? key, EdgeInsets? menuPadding, ScrollController? scrollController})
       : super(
           key: key,
-          name: 'address book peer',
-          loadEvent: LoadEvent.addressBook,
+          peerTabIndex: PeerTabIndex.ab,
           peerFilter: (Peer peer) =>
               _hitTag(gFFI.abModel.selectedTags, peer.tags),
           peerCardBuilder: (Peer peer) => AddressBookPeerCard(
             peer: peer,
             menuPadding: menuPadding,
           ),
-          getInitPeers: getInitPeers,
         );
 
   static bool _hitTag(List<dynamic> selectedTags, List<dynamic> idents) {
@@ -539,20 +547,15 @@ class AddressBookPeersView extends BasePeersView {
 
 class MyGroupPeerView extends BasePeersView {
   MyGroupPeerView(
-      {Key? key,
-      EdgeInsets? menuPadding,
-      ScrollController? scrollController,
-      required GetInitPeers getInitPeers})
+      {Key? key, EdgeInsets? menuPadding, ScrollController? scrollController})
       : super(
           key: key,
-          name: 'group peer',
-          loadEvent: LoadEvent.group,
+          peerTabIndex: PeerTabIndex.group,
           peerFilter: filter,
           peerCardBuilder: (Peer peer) => MyGroupPeerCard(
             peer: peer,
             menuPadding: menuPadding,
           ),
-          getInitPeers: getInitPeers,
         );
 
   static bool filter(Peer peer) {
